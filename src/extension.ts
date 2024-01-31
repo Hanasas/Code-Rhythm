@@ -2,10 +2,39 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import axios,{ AxiosResponse, AxiosError } from 'axios';
+import { exec } from 'child_process';
+import { writeFileSync } from 'fs';
+
+//C:\Users\ASUS\AppData\Local\Programs\Python\Python310
+// 定义要运行的 Python 脚本路径及参数
+const pythonPath = 'C:/Users/ASUS/AppData/Local/Programs/Python/Python310'; // Python 安装路径
+const scriptPath = './predict.py';
+const args = ['arg1', 'arg2']; // Python 脚本需要传递的参数
+
 
 let inputCount: number = 0;
 let lastUpdateTime: number = Date.now();
 let lastSpeed: number = 0;
+let coding_language : string = 'python';
+let coding_speed : number = 0;
+let playing_id :number = 0;
+
+enum MediaType {
+    MusicType = 1,
+    imageType = 2,
+    videoType = 3,
+}
+enum Kind{
+    programming,
+    administrative_working,
+    manual_laboring,
+    drawing,
+    exersising,
+    cooking,
+    sleeping,
+    relaxing,
+    eating,
+}
 
 interface Music {
     id: number;
@@ -13,10 +42,20 @@ interface Music {
     artist: string;
     cover: string;
     url: string;
-    kind: number;
+    kind: Kind;
     text: string;
-    type: string;
+    type: MediaType;
 }
+
+//用于机器学习的统计表
+interface Statistic {
+    language: string;
+    speed: number;
+    id: number;
+}
+let statistics: Statistic[] = [];
+//保存用于学习的统计表的路径
+const learning_statistics_path = "./statistics..csv";
 
 let musicSet: Music[] = [];
 let panel: vscode.WebviewPanel | undefined;
@@ -102,6 +141,10 @@ function onDidChangeTextDocument(event: vscode.TextDocumentChangeEvent) {
         let diff = lastSpeed - nowSpeed;
         if(diff < 0){ diff = - diff; }
         if(diff > 1){
+
+            statistics.push({language:coding_language,speed:coding_speed,id:playing_id});
+
+            coding_speed = nowSpeed;
             musicId = rollNewMusic(nowSpeed);
         }
         // 显示平均速率信息
@@ -130,7 +173,7 @@ function updateLanguageInfo() {
     if (editor) {
         // 获取当前文本编辑器的语言 ID
         const languageId = editor.document.languageId;
-
+        coding_language = languageId;
         // 显示语言信息
         vscode.window.showInformationMessage(`Current language: ${languageId}`);
     }
@@ -152,29 +195,35 @@ async function getMusicFromServer() {
   });
 }
 
+//使用机器学习模型预测的音乐
 function rollNewMusic(nowSpeed: number):number{
-    let curKind = 0; 
-    let musicId = 0;
-    if(nowSpeed === 0) {
-        curKind = 0;
-    } else if(nowSpeed > 0 && nowSpeed < 1) {
-        curKind = 1;
-    } else if(nowSpeed >=1 && nowSpeed < 2) {
-        curKind = 2;
-    } else if(nowSpeed >=2 && nowSpeed < 3){
-        curKind = 3;
-    } else {
-        curKind = 4;
-    }
-    
-    let randomInteger = Math.floor(Math.random() * 10) + 1;
-    randomInteger = randomInteger % musicSet.length;
-    for(let i = randomInteger ; i < musicSet.length ; i++){
-        if(musicSet[i].kind === curKind){
-            musicId = i;
-            break;
+    let musicId : number = 0;
+    exec(`python ${scriptPath} ${coding_language} ${nowSpeed}`, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`执行错误： ${error}`);
+          return;
         }
+        console.log(`结果： ${stdout}`);
+        musicId = Number(stdout);
+        if(Number.isNaN(musicId)){
+            musicId = 0;
+        }
+      });
+    playing_id = musicId;
+    return musicId;
+}
+function rollNewMusic_OldType():number{
+    let musicId : number = 0;
+    let size : number = musicSet.length;
+    let randomIndex: number = Math.floor(Math.random() * size);
+    for(let i = 0 ; i < size ; i++){
+        if(musicSet[i].kind === Kind.programming){
+            randomIndex = randomIndex - 1;
+            if(randomIndex === 0) { musicId = i; }
+        }
+        if(i === size - 1){ i = 0; }
     }
+    playing_id = musicId;
     return musicId;
 }
 
@@ -194,10 +243,29 @@ function getWebviewContent(musicId: any) {
             Your browser does not support the audio tag.
         </audio>
 
+        <button id="rollButton">Roll</button>
+
+        <script>
+            const rollButton = document.getElementById('rollButton');
+            rollButton.addEventListener('click', () => {
+                ${rollNewMusic(coding_speed)}
+            });
+        </script>
+
         </body>
         </html>
     `;
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+// 将统计表写入CSV文件
+function writeStatisticsToCSV(statistics: Statistic[]): void {
+    const header = ["Language", "Speed", "Id"];
+    const rows = statistics.map((stat) => [stat.language, stat.speed, stat.id]);
+    const csvContent = [header.join(",")].concat(rows.map((row) => row.join(","))).join("\n");
+    writeFileSync(learning_statistics_path, csvContent);
+}
+
+//结束时将本次记录的数据保存到learning_statistics_path
+export function deactivate() {
+    writeStatisticsToCSV(statistics);
+}
