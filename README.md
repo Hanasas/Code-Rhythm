@@ -13,6 +13,15 @@ npm install -g yo generator-code
 
 VSCode `Extension Test Runner`. Get it in VSCode extension shop.
 
+### For typescript
+```
+npm isntall fs
+npm install axios
+```
+### for python
+```
+pip install joblib
+```
 ## shakedown test
 Press `F5` to open a `Extension Development Host`
 Press `cmd + shift + p` and input `Hello World`. Press `Enter` to see the effect.
