@@ -24,6 +24,7 @@ pip install joblib
 ```
 ## shakedown test
 Press `F5` to open a `Extension Development Host`
+
 Press `cmd + shift + p` and input `Hello World`. Press `Enter` to see the effect.
 
 ## Learn more about VSCode extension
